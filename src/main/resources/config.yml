@@ -1,0 +1,10 @@
+spawners:
+  base-cycle-seconds: 10
+  speed-reduction-per-level: 0.2
+  amount-bonus-per-level: 0.5
+  max-speed-level: 10
+  max-amount-level: 10
+  max-stack-size: 64
+  storage-slots: 36
+  speed-upgrade-base-cost: 25
+  amount-upgrade-base-cost: 25

@@ -1,0 +1,11 @@
+name: EconomyPlugin
+version: 1.0.0
+main: com.example.Main
+api-version: "1.21"
+commands:
+  pay:
+    description: Pay money
+  money:
+    description: Check balance
+  menu:
+    description: Main server menu
