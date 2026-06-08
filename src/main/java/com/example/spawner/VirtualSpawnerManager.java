@@ -79,8 +79,7 @@ public class VirtualSpawnerManager {
          runtime.incrementProgress();
          VirtualSpawnerData data = runtime.getData();
 
-         int cycleSeconds = this.config.getCycleSeconds(data);
-         int targetTicks = Math.max(20, cycleSeconds * 20);
+         int targetTicks = this.config.getCycleSeconds(data);
 
          if (runtime.getProgressTicks() >= targetTicks) {
             runtime.resetProgress();
@@ -102,6 +101,8 @@ public class VirtualSpawnerManager {
             for (MobDropRegistry.DropResult drop : drops) {
                addDropsToStorage(storedItems, drop.material(), drop.amount(), maxStorageSlots);
             }
+
+            this.storage.writeBlock(block, data);
 
             // Consume boost after one cycle
             if (this.boostedSpawners.containsKey(block)) {

@@ -35,7 +35,9 @@ public final class VirtualSpawnerListener implements Listener {
       VirtualSpawnerData itemData = this.manager.getStorage().readItem(item);
       
       if (itemData != null) {
-         this.manager.registerSpawner(block, itemData.copy());
+         VirtualSpawnerData data = itemData.copy();
+         this.manager.registerSpawner(block, data);
+         this.manager.getStorage().writeBlock(block, data);
       } else {
          // Handle regular vanilla spawners by reading their spawn type
          CreatureSpawner spawner = (CreatureSpawner) block.getState();
