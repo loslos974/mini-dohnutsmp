@@ -28,7 +28,9 @@ public final class VirtualSpawnerGui {
    }
 
    public void open(Player player, Location location, VirtualSpawnerData data) {
-      Inventory inventory = Bukkit.createInventory(null, 54, SpawnerConfig.GUI_TITLE);
+      SpawnerGuiHolder holder = new SpawnerGuiHolder(location.clone());
+      Inventory inventory = Bukkit.createInventory(holder, 54, SpawnerConfig.GUI_TITLE);
+      holder.setInventory(inventory);
       this.populate(inventory, data);
       this.openSessions.put(player, location.clone());
       player.openInventory(inventory);

@@ -3,7 +3,6 @@ package com.example.spawner;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
@@ -12,6 +11,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 
@@ -29,18 +29,28 @@ public final class VirtualSpawnerGuiListener implements Listener {
          return;
       }
 
-      String title = event.getView().getTitle();
-      if (!this.manager.getGui().isSpawnerGui(title)) {
+      // Robust detection: identify the GUI by its holder type, not a title string.
+      if (!(event.getInventory().getHolder() instanceof SpawnerGuiHolder holder)) {
          return;
       }
 
+      int rawSlot = event.getRawSlot();
+      Inventory top = event.getView().getTopInventory();
+      boolean clickedTop = rawSlot >= 0 && rawSlot < top.getSize();
+
+      // Clicks in the player's own inventory: only block shift-clicks that would
+      // shovel items into the virtual GUI; leave normal inventory use intact.
+      if (!clickedTop) {
+         if (event.isShiftClick()) {
+            event.setCancelled(true);
+         }
+         return;
+      }
+
+      // The whole top inventory is virtual/decorative — we manage every change manually.
       event.setCancelled(true);
-      Location location = this.manager.getGui().getOpenLocation(player);
-      if (location == null) {
-         return;
-      }
 
-      Block block = location.getBlock();
+      Block block = holder.getLocation().getBlock();
       VirtualSpawnerData data = this.manager.getData(block);
       if (data == null) {
          player.sendMessage("§cThat spawner no longer exists.");
@@ -48,45 +58,71 @@ public final class VirtualSpawnerGuiListener implements Listener {
          return;
       }
 
-      int rawSlot = event.getRawSlot();
-      Inventory top = event.getView().getTopInventory();
-      if (rawSlot < 0 || rawSlot >= top.getSize()) {
+      switch (rawSlot) {
+         case VirtualSpawnerGui.CLAIM_SLOT -> {
+            this.claimAll(player, data);
+            this.manager.saveData(block, data);
+            this.manager.getGui().refresh(player, data);
+         }
+         case VirtualSpawnerGui.SPEED_SLOT -> this.upgradeSpeed(player, block, data);
+         case VirtualSpawnerGui.AMOUNT_SLOT -> this.upgradeAmount(player, block, data);
+         case VirtualSpawnerGui.BOOST_SLOT -> this.boostSpawner(player, block, data);
+         case VirtualSpawnerGui.INFO_SLOT -> {
+            // Informational button — no interaction.
+         }
+         default -> this.claimSingle(player, block, data, event.getCurrentItem());
+      }
+   }
+
+   @EventHandler(priority = EventPriority.HIGH)
+   public void onInventoryDrag(InventoryDragEvent event) {
+      if (!(event.getInventory().getHolder() instanceof SpawnerGuiHolder)) {
          return;
       }
 
-      if (rawSlot == VirtualSpawnerGui.CLAIM_SLOT) {
-         this.claimAll(player, data);
-         this.manager.saveData(block, data);
-         this.manager.getGui().refresh(player, data);
-         return;
-      }
-
-      if (rawSlot == VirtualSpawnerGui.SPEED_SLOT) {
-         this.upgradeSpeed(player, block, data);
-         return;
-      }
-
-      if (rawSlot == VirtualSpawnerGui.AMOUNT_SLOT) {
-         this.upgradeAmount(player, block, data);
-         return;
-      }
-
-      if (rawSlot == VirtualSpawnerGui.BOOST_SLOT) {
-         this.boostSpawner(player, block, data);
+      int topSize = event.getView().getTopInventory().getSize();
+      for (int slot : event.getRawSlots()) {
+         if (slot < topSize) {
+            event.setCancelled(true);
+            return;
+         }
       }
    }
 
    @EventHandler
    public void onInventoryClose(InventoryCloseEvent event) {
-      if (!(event.getPlayer() instanceof Player player)) {
+      if (!(event.getInventory().getHolder() instanceof SpawnerGuiHolder)) {
          return;
       }
 
-      if (!this.manager.getGui().isSpawnerGui(event.getView().getTitle())) {
+      if (event.getPlayer() instanceof Player player) {
+         this.manager.getGui().closeSession(player);
+      }
+   }
+
+   private void claimSingle(Player player, Block block, VirtualSpawnerData data, ItemStack clicked) {
+      if (clicked == null || clicked.getType().isAir() || clicked.getType() == Material.GRAY_STAINED_GLASS_PANE) {
          return;
       }
 
-      this.manager.getGui().closeSession(player);
+      Iterator<ItemStack> iterator = data.getStoredItems().iterator();
+      while (iterator.hasNext()) {
+         ItemStack stored = iterator.next();
+         if (stored == null || stored.getType().isAir() || !stored.isSimilar(clicked)) {
+            continue;
+         }
+
+         ItemStack remaining = this.giveItem(player, stored.clone());
+         iterator.remove();
+         if (remaining != null && !remaining.getType().isAir() && remaining.getAmount() > 0) {
+            this.manager.addToStorage(data, remaining);
+            player.sendMessage("§eInventory full — some items remain in the spawner.");
+         }
+
+         this.manager.saveData(block, data);
+         this.manager.getGui().refresh(player, data);
+         return;
+      }
    }
 
    private void claimAll(Player player, VirtualSpawnerData data) {

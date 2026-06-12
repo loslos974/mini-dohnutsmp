@@ -2,6 +2,7 @@ package com.example.spawner;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import org.bukkit.entity.EntityType;
 import org.bukkit.inventory.ItemStack;
 
@@ -11,6 +12,7 @@ public final class VirtualSpawnerData {
    private int stackSize;
    private int speedLevel;
    private int amountLevel;
+   private UUID owner;
    private final List<ItemStack> storedItems;
 
    public VirtualSpawnerData(EntityType mobType) {
@@ -18,10 +20,15 @@ public final class VirtualSpawnerData {
    }
 
    public VirtualSpawnerData(EntityType mobType, int stackSize, int speedLevel, int amountLevel, List<ItemStack> storedItems) {
+      this(mobType, stackSize, speedLevel, amountLevel, storedItems, null);
+   }
+
+   public VirtualSpawnerData(EntityType mobType, int stackSize, int speedLevel, int amountLevel, List<ItemStack> storedItems, UUID owner) {
       this.mobType = mobType;
       this.stackSize = Math.max(1, stackSize);
       this.speedLevel = Math.max(0, speedLevel);
       this.amountLevel = Math.max(0, amountLevel);
+      this.owner = owner;
       this.storedItems = storedItems == null ? new ArrayList<>() : new ArrayList<>(storedItems);
    }
 
@@ -57,6 +64,14 @@ public final class VirtualSpawnerData {
       this.amountLevel = Math.max(0, amountLevel);
    }
 
+   public UUID getOwner() {
+      return this.owner;
+   }
+
+   public void setOwner(UUID owner) {
+      this.owner = owner;
+   }
+
    public List<ItemStack> getStoredItems() {
       return this.storedItems;
    }
@@ -70,6 +85,6 @@ public final class VirtualSpawnerData {
          }
       }
 
-      return new VirtualSpawnerData(this.mobType, this.stackSize, this.speedLevel, this.amountLevel, cloned);
+      return new VirtualSpawnerData(this.mobType, this.stackSize, this.speedLevel, this.amountLevel, cloned, this.owner);
    }
 }

@@ -16,6 +16,7 @@ public final class VirtualSpawnerKeys {
    private final NamespacedKey stackSize;
    private final NamespacedKey speedLevel;
    private final NamespacedKey amountLevel;
+   private final NamespacedKey owner;
    private final NamespacedKey storedItems;
 
    public VirtualSpawnerKeys(Main plugin) {
@@ -24,6 +25,7 @@ public final class VirtualSpawnerKeys {
       this.stackSize = new NamespacedKey(plugin, "spawner_stack_size");
       this.speedLevel = new NamespacedKey(plugin, "spawner_speed_level");
       this.amountLevel = new NamespacedKey(plugin, "spawner_amount_level");
+      this.owner = new NamespacedKey(plugin, "spawner_owner");
       this.storedItems = new NamespacedKey(plugin, "spawner_stored_items");
    }
 
@@ -45,6 +47,10 @@ public final class VirtualSpawnerKeys {
 
    public NamespacedKey amountLevel() {
       return this.amountLevel;
+   }
+
+   public NamespacedKey owner() {
+      return this.owner;
    }
 
    public NamespacedKey storedItems() {

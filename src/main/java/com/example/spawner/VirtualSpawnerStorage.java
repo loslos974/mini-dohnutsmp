@@ -2,6 +2,7 @@ package com.example.spawner;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
@@ -52,8 +53,9 @@ public final class VirtualSpawnerStorage {
       int stackSize = this.getInt(container, this.keys.stackSize(), 1);
       int speedLevel = this.getInt(container, this.keys.speedLevel(), 0);
       int amountLevel = this.getInt(container, this.keys.amountLevel(), 0);
+      UUID owner = this.readUuid(container, this.keys.owner());
       List<ItemStack> storedItems = ItemStackCodec.deserialize(container.get(this.keys.storedItems(), VirtualSpawnerKeys.BYTE_ARRAY));
-      return new VirtualSpawnerData(mobType, stackSize, speedLevel, amountLevel, storedItems);
+      return new VirtualSpawnerData(mobType, stackSize, speedLevel, amountLevel, storedItems, owner);
    }
 
    public VirtualSpawnerData readBlock(Block block) {
@@ -76,6 +78,14 @@ public final class VirtualSpawnerStorage {
       container.set(this.keys.stackSize(), VirtualSpawnerKeys.INTEGER, data.getStackSize());
       container.set(this.keys.speedLevel(), VirtualSpawnerKeys.INTEGER, data.getSpeedLevel());
       container.set(this.keys.amountLevel(), VirtualSpawnerKeys.INTEGER, data.getAmountLevel());
+
+      // SnakeYAML/PDC cannot serialize a raw java.util.UUID — always store it as its String form.
+      if (data.getOwner() != null) {
+         container.set(this.keys.owner(), VirtualSpawnerKeys.STRING, data.getOwner().toString());
+      } else {
+         container.remove(this.keys.owner());
+      }
+
       container.set(this.keys.storedItems(), VirtualSpawnerKeys.BYTE_ARRAY, ItemStackCodec.serialize(data.getStoredItems()));
    }
 
@@ -135,6 +145,19 @@ public final class VirtualSpawnerStorage {
    private int getInt(PersistentDataContainer container, org.bukkit.NamespacedKey key, int defaultValue) {
       Integer value = container.get(key, VirtualSpawnerKeys.INTEGER);
       return value == null ? defaultValue : value;
+   }
+
+   private UUID readUuid(PersistentDataContainer container, org.bukkit.NamespacedKey key) {
+      String raw = container.get(key, VirtualSpawnerKeys.STRING);
+      if (raw == null || raw.isBlank()) {
+         return null;
+      }
+
+      try {
+         return UUID.fromString(raw);
+      } catch (IllegalArgumentException ex) {
+         return null;
+      }
    }
 
    private List<String> buildItemLore(VirtualSpawnerData data) {

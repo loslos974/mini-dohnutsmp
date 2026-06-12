@@ -1,5 +1,6 @@
 package com.example.spawner;
 
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.CreatureSpawner;
@@ -36,6 +37,9 @@ public final class VirtualSpawnerListener implements Listener {
       
       if (itemData != null) {
          VirtualSpawnerData data = itemData.copy();
+         if (data.getOwner() == null) {
+            data.setOwner(event.getPlayer().getUniqueId());
+         }
          this.manager.registerSpawner(block, data);
          this.manager.getStorage().writeBlock(block, data);
       } else {
@@ -44,6 +48,7 @@ public final class VirtualSpawnerListener implements Listener {
          EntityType mobType = spawner.getSpawnedType();
          if (mobType != null && mobType != EntityType.UNKNOWN) {
             VirtualSpawnerData defaultData = new VirtualSpawnerData(mobType);
+            defaultData.setOwner(event.getPlayer().getUniqueId());
             this.manager.registerSpawner(block, defaultData);
             this.manager.getStorage().writeBlock(block, defaultData);
          }
@@ -76,8 +81,28 @@ public final class VirtualSpawnerListener implements Listener {
       event.setExpToDrop(0);
       this.manager.unregisterSpawner(block.getLocation());
 
-      ItemStack drop = this.manager.getStorage().createSpawnerItem(data);
-      block.getWorld().dropItemNaturally(block.getLocation().add(0.5D, 0.5D, 0.5D), drop);
+      Location dropLoc = block.getLocation().add(0.5D, 0.5D, 0.5D);
+
+      // Each dropped item is a single, clean spawner of this mob type. The number
+      // of items dropped equals the stored stack size (stack of 2 -> 2 items).
+      int stackCount = Math.max(1, data.getStackSize());
+      ItemStack template = this.manager.getStorage().createSpawnerItem(new VirtualSpawnerData(data.getMobType()));
+
+      int remaining = stackCount;
+      while (remaining > 0) {
+         int amount = Math.min(remaining, template.getMaxStackSize());
+         ItemStack drop = template.clone();
+         drop.setAmount(amount);
+         block.getWorld().dropItemNaturally(dropLoc, drop);
+         remaining -= amount;
+      }
+
+      // Don't silently lose accumulated virtual loot — drop it alongside the spawners.
+      for (ItemStack stored : data.getStoredItems()) {
+         if (stored != null && !stored.getType().isAir()) {
+            block.getWorld().dropItemNaturally(dropLoc, stored.clone());
+         }
+      }
    }
 
    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
