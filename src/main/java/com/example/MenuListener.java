@@ -448,12 +448,16 @@ public class MenuListener implements Listener {
       session.revealDone = true;
       player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0F, 1.0F);
 
-      // Let the reward reveal linger briefly, then drop the player back into the main menu.
+      // Let the reward reveal linger briefly, then drop the player back into the marketplace.
       final UUID rollerId = player.getUniqueId();
       this.plugin.getServer().getScheduler().runTaskLater(this.plugin, () -> {
          Player roller = this.plugin.getServer().getPlayer(rollerId);
          if (roller != null && roller.isOnline()) {
-            this.handler.openMainMenu(roller);
+            if (this.plugin.getMarketplace() != null) {
+               this.plugin.getMarketplace().openHome(roller);
+            } else {
+               this.handler.openMainMenu(roller);
+            }
          }
       }, REVEAL_LINGER_TICKS);
    }

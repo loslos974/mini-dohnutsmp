@@ -55,6 +55,11 @@ public class CommandHandler implements CommandExecutor {
                break;
             case "menu":
                this.openMenu(player, CommandHandler.MenuId.MAIN, true);
+               break;
+            case "market":
+               if (this.plugin.getMarketplace() != null) {
+                  this.plugin.getMarketplace().openHome(player);
+               }
          }
 
          return true;

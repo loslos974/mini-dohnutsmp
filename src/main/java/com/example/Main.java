@@ -43,19 +43,60 @@ public class Main extends JavaPlugin {
    private FileConfiguration dataConfig;
    private CommandHandler commandHandler;
    private VirtualSpawnerManager virtualSpawnerManager;
+   private DatabaseManager database;
+   private MarketplaceMenu marketplace;
 
    public void onEnable() {
       this.createDataConfig();
       this.loadData();
+
+      // Bring up the async SQLite/Hikari economy store. The DB is authoritative on startup; any
+      // legacy YAML-only entries are migrated forward with an immediate async write.
+      this.database = new DatabaseManager(this);
+      this.database.loadInto(this.balances, this.tokens);
+      this.database.saveAllAsync(this.balances, this.tokens);
+
       this.commandHandler = new CommandHandler(this);
       ((PluginCommand)Objects.requireNonNull(this.getCommand("pay"))).setExecutor(this.commandHandler);
       ((PluginCommand)Objects.requireNonNull(this.getCommand("money"))).setExecutor(this.commandHandler);
       ((PluginCommand)Objects.requireNonNull(this.getCommand("menu"))).setExecutor(this.commandHandler);
       ((PluginCommand)Objects.requireNonNull(this.getCommand("grant"))).setExecutor(this.commandHandler);
+      ((PluginCommand)Objects.requireNonNull(this.getCommand("market"))).setExecutor(this.commandHandler);
+      this.marketplace = new MarketplaceMenu(this);
       this.getServer().getPluginManager().registerEvents(new MenuListener(this, this.commandHandler), this);
+      this.getServer().getPluginManager().registerEvents(new MarketplaceListener(this, this.marketplace), this);
       this.virtualSpawnerManager = new VirtualSpawnerManager(this);
       this.virtualSpawnerManager.enable();
+
+      this.hookVault();
+
       this.getLogger().info("Economy Pro V6 - Farming & Lore Active!");
+   }
+
+   private void hookVault() {
+      // Referencing VaultEconomyProvider only inside this guarded branch keeps the net.milkbowl
+      // classes off the classloader entirely when Vault is not installed.
+      if (this.getServer().getPluginManager().getPlugin("Vault") == null) {
+         this.getLogger().info("Vault not found — skipping economy provider registration.");
+         return;
+      }
+
+      try {
+         VaultEconomyProvider provider = new VaultEconomyProvider(this);
+         this.getServer().getServicesManager().register(
+            net.milkbowl.vault.economy.Economy.class, provider, this, org.bukkit.plugin.ServicePriority.Highest);
+         this.getLogger().info("Registered EconomyPlugin as the Vault economy provider.");
+      } catch (Throwable ex) {
+         this.getLogger().warning("Failed to hook Vault: " + ex.getMessage());
+      }
+   }
+
+   public DatabaseManager getDatabase() {
+      return this.database;
+   }
+
+   public MarketplaceMenu getMarketplace() {
+      return this.marketplace;
    }
 
    public double getMultiplier(UUID uuid) {
@@ -81,6 +122,10 @@ public class Main extends JavaPlugin {
       }
 
       this.saveData();
+
+      if (this.database != null) {
+         this.database.shutdown(this.balances, this.tokens);
+      }
    }
 
    public int getCrateKeyCount(UUID uuid, CrateType type) {
@@ -395,6 +440,12 @@ public class Main extends JavaPlugin {
          this.dataConfig.save(this.dataFile);
       } catch (IOException e) {
          e.printStackTrace();
+      }
+
+      // Write-through: economy balances/tokens are persisted asynchronously to SQLite via the
+      // isolated worker pool. The synchronous YAML save above is retained as a redundant backup.
+      if (this.database != null) {
+         this.database.saveAllAsync(this.balances, this.tokens);
       }
 
    }

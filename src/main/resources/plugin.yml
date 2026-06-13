@@ -2,6 +2,7 @@ name: EconomyPlugin
 version: 1.0.0
 main: com.example.Main
 api-version: "1.21"
+softdepend: [Vault]
 commands:
   pay:
     description: Pay money
@@ -9,6 +10,8 @@ commands:
     description: Check balance
   menu:
     description: Main server menu
+  market:
+    description: Open the marketplace
   grant:
     description: Grant money or tokens to a player (admin only)
     usage: /grant <money|tokens> <player> <amount>
