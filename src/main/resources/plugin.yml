@@ -9,3 +9,11 @@ commands:
     description: Check balance
   menu:
     description: Main server menu
+  grant:
+    description: Grant money or tokens to a player (admin only)
+    usage: /grant <money|tokens> <player> <amount>
+    permission: economyplugin.admin
+permissions:
+  economyplugin.admin:
+    description: Allows use of admin economy commands such as /grant
+    default: op

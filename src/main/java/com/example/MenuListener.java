@@ -17,6 +17,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -25,8 +26,11 @@ import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 
 public class MenuListener implements Listener {
+   private static final long REVEAL_LINGER_TICKS = 45L;
    private final Main plugin;
    private final CommandHandler handler;
    private static final Material[] GLASS_PANES;
@@ -70,6 +74,8 @@ public class MenuListener implements Listener {
                }
             }
 
+            // Items may move into/out of the machine on this click — recompute the live total next tick.
+            this.scheduleSellValueUpdate(player);
          } else if ("§e§lRolling...".equals(title)) {
             if (topClick) {
                event.setCancelled(true);
@@ -441,6 +447,15 @@ public class MenuListener implements Listener {
       this.plugin.saveData();
       session.revealDone = true;
       player.playSound(player.getLocation(), Sound.UI_TOAST_CHALLENGE_COMPLETE, 1.0F, 1.0F);
+
+      // Let the reward reveal linger briefly, then drop the player back into the main menu.
+      final UUID rollerId = player.getUniqueId();
+      this.plugin.getServer().getScheduler().runTaskLater(this.plugin, () -> {
+         Player roller = this.plugin.getServer().getPlayer(rollerId);
+         if (roller != null && roller.isOnline()) {
+            this.handler.openMainMenu(roller);
+         }
+      }, REVEAL_LINGER_TICKS);
    }
 
    private void beginAuctionSellFlow(Player player) {
@@ -725,19 +740,47 @@ public class MenuListener implements Listener {
          double finalProfit = total * multiplier;
          this.plugin.balances.put(player.getUniqueId(), this.plugin.balances.getOrDefault(player.getUniqueId(), 0.0) + finalProfit);
          this.plugin.saveData();
-         player.sendMessage("§aProfit: §6" + EconomyPrices.formatMoney(finalProfit));
+         player.sendMessage(Component.text("Profit: ", NamedTextColor.GREEN)
+            .append(Component.text(EconomyPrices.formatMoney(finalProfit), NamedTextColor.GOLD)));
          if (hadUnsellable) {
-            player.sendMessage("§eSome items cannot be sold and were left in the machine.");
+            player.sendMessage(Component.text("Some items cannot be sold and were left in the machine.", NamedTextColor.YELLOW));
          }
 
          player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.5F, 1.2F);
          player.closeInventory();
       } else if (hadUnsellable) {
-         player.sendMessage("§cThose items cannot be sold here.");
+         player.sendMessage(Component.text("Those items cannot be sold here.", NamedTextColor.RED));
       } else {
-         player.sendMessage("§cMachine empty!");
+         player.sendMessage(Component.text("Machine empty!", NamedTextColor.RED));
       }
 
+   }
+
+   private void scheduleSellValueUpdate(Player player) {
+      this.plugin.getServer().getScheduler().runTask(this.plugin, () -> {
+         if (!player.isOnline()) {
+            return;
+         }
+
+         InventoryView view = player.getOpenInventory();
+         if (view != null && "§0§l» §2§lSELL MACHINE".equals(view.getTitle())) {
+            this.updateSellValue(player, view.getTopInventory());
+         }
+      });
+   }
+
+   private void updateSellValue(Player player, Inventory top) {
+      double total = 0.0;
+
+      for(int i = 0; i < 45; ++i) {
+         ItemStack item = top.getItem(i);
+         if (item != null && item.getType() != Material.AIR && EconomyPrices.canSell(item.getType())) {
+            total += this.plugin.getItemPrice(item.getType()) * (double)item.getAmount();
+         }
+      }
+
+      double finalValue = total * this.plugin.getMultiplier(player.getUniqueId());
+      top.setItem(49, this.handler.buildSellConfirmButton(finalValue));
    }
 
    @EventHandler
@@ -774,6 +817,28 @@ public class MenuListener implements Listener {
          }
 
       }
+   }
+
+   @EventHandler(priority = EventPriority.HIGHEST)
+   public void onInventoryDrag(InventoryDragEvent event) {
+      if (!(event.getWhoClicked() instanceof Player player)) {
+         return;
+      }
+
+      if (!"§0§l» §2§lSELL MACHINE".equals(event.getView().getTitle())) {
+         return;
+      }
+
+      // Keep the button/border row (slots 45-53) clear; the upper grid stays drop-friendly.
+      int topSize = event.getView().getTopInventory().getSize();
+      for (int slot : event.getRawSlots()) {
+         if (slot >= 45 && slot < topSize) {
+            event.setCancelled(true);
+            break;
+         }
+      }
+
+      this.scheduleSellValueUpdate(player);
    }
 
    @EventHandler

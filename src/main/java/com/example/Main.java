@@ -51,6 +51,7 @@ public class Main extends JavaPlugin {
       ((PluginCommand)Objects.requireNonNull(this.getCommand("pay"))).setExecutor(this.commandHandler);
       ((PluginCommand)Objects.requireNonNull(this.getCommand("money"))).setExecutor(this.commandHandler);
       ((PluginCommand)Objects.requireNonNull(this.getCommand("menu"))).setExecutor(this.commandHandler);
+      ((PluginCommand)Objects.requireNonNull(this.getCommand("grant"))).setExecutor(this.commandHandler);
       this.getServer().getPluginManager().registerEvents(new MenuListener(this, this.commandHandler), this);
       this.virtualSpawnerManager = new VirtualSpawnerManager(this);
       this.virtualSpawnerManager.enable();

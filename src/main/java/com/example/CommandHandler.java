@@ -17,6 +17,9 @@ import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 
 public class CommandHandler implements CommandExecutor {
    public static final String TITLE_ROLLING = "§e§lRolling...";
@@ -33,9 +36,15 @@ public class CommandHandler implements CommandExecutor {
    }
 
    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+      String name = command.getName().toLowerCase();
+      if (name.equals("grant")) {
+         this.handleGrant(sender, args);
+         return true;
+      }
+
       if (sender instanceof Player) {
          Player player = (Player)sender;
-         switch (command.getName().toLowerCase()) {
+         switch (name) {
             case "money":
                double balance = (Double)this.plugin.balances.getOrDefault(player.getUniqueId(), (double)0.0F);
                Object[] var10002 = new Object[]{balance};
@@ -51,6 +60,80 @@ public class CommandHandler implements CommandExecutor {
          return true;
       } else {
          return true;
+      }
+   }
+
+   private void handleGrant(CommandSender sender, String[] args) {
+      if (!sender.isOp() && !sender.hasPermission("economyplugin.admin")) {
+         sender.sendMessage(Component.text("You don't have permission to use this command.", NamedTextColor.RED));
+         return;
+      }
+
+      if (args.length != 3) {
+         sender.sendMessage(Component.text("Usage: /grant <money|tokens> <player> <amount>", NamedTextColor.RED));
+         return;
+      }
+
+      String type = args[0].toLowerCase();
+      if (!type.equals("money") && !type.equals("tokens")) {
+         sender.sendMessage(Component.text("First argument must be 'money' or 'tokens'.", NamedTextColor.RED));
+         return;
+      }
+
+      Player target = Bukkit.getPlayerExact(args[1]);
+      if (target == null || !target.isOnline()) {
+         sender.sendMessage(Component.text("Player '" + args[1] + "' is not online.", NamedTextColor.RED));
+         return;
+      }
+
+      UUID targetId = target.getUniqueId();
+
+      if (type.equals("money")) {
+         double amount;
+         try {
+            amount = Double.parseDouble(args[2]);
+         } catch (NumberFormatException ex) {
+            sender.sendMessage(Component.text("Amount must be a valid number.", NamedTextColor.RED));
+            return;
+         }
+
+         if (amount <= 0.0 || Double.isNaN(amount) || Double.isInfinite(amount)) {
+            sender.sendMessage(Component.text("Amount must be greater than 0.", NamedTextColor.RED));
+            return;
+         }
+
+         this.plugin.balances.put(targetId, this.plugin.balances.getOrDefault(targetId, 0.0) + amount);
+         this.plugin.saveData();
+
+         sender.sendMessage(Component.text("Granted ", NamedTextColor.GREEN)
+            .append(Component.text(EconomyPrices.formatMoney(amount), NamedTextColor.GOLD))
+            .append(Component.text(" to " + target.getName() + ".", NamedTextColor.GREEN)));
+         target.sendMessage(Component.text("You received ", NamedTextColor.GREEN)
+            .append(Component.text(EconomyPrices.formatMoney(amount), NamedTextColor.GOLD))
+            .append(Component.text(" from an admin.", NamedTextColor.GREEN)));
+      } else {
+         int amount;
+         try {
+            amount = Integer.parseInt(args[2]);
+         } catch (NumberFormatException ex) {
+            sender.sendMessage(Component.text("Token amount must be a whole number.", NamedTextColor.RED));
+            return;
+         }
+
+         if (amount <= 0) {
+            sender.sendMessage(Component.text("Amount must be greater than 0.", NamedTextColor.RED));
+            return;
+         }
+
+         this.plugin.tokens.put(targetId, this.plugin.tokens.getOrDefault(targetId, 0) + amount);
+         this.plugin.saveData();
+
+         sender.sendMessage(Component.text("Granted ", NamedTextColor.GREEN)
+            .append(Component.text(amount + " tokens", NamedTextColor.AQUA))
+            .append(Component.text(" to " + target.getName() + ".", NamedTextColor.GREEN)));
+         target.sendMessage(Component.text("You received ", NamedTextColor.GREEN)
+            .append(Component.text(amount + " tokens", NamedTextColor.AQUA))
+            .append(Component.text(" from an admin.", NamedTextColor.GREEN)));
       }
    }
 
@@ -230,10 +313,41 @@ public class CommandHandler implements CommandExecutor {
 
       double mult = this.plugin.getMultiplier(player.getUniqueId());
       inv.setItem(48, this.createGuiItem(Material.GOLD_BLOCK, "§6§lYour Bonus", "§7Multiplier: §a" + mult + "x"));
-      inv.setItem(49, this.createGuiItem(Material.LIME_WOOL, "§a§lCONFIRM SALE", "§7Click to sell items!"));
+      inv.setItem(49, this.buildSellConfirmButton(0.0));
       inv.setItem(50, this.createGuiItem(Material.BARRIER, "§c§lCANCEL", "§7Returns items to you"));
       inv.setItem(53, this.createBackButton());
       player.openInventory(inv);
+   }
+
+   /**
+    * Donut-style "Confirm Sale" button: prominent green glass with a live payout total.
+    * Built with the Adventure Component API.
+    */
+   public ItemStack buildSellConfirmButton(double totalValue) {
+      ItemStack item = new ItemStack(Material.GREEN_STAINED_GLASS_PANE);
+      ItemMeta meta = item.getItemMeta();
+      if (meta != null) {
+         meta.displayName(Component.text("CONFIRM SALE", NamedTextColor.GREEN, TextDecoration.BOLD)
+            .decoration(TextDecoration.ITALIC, false));
+
+         List<Component> lore = new ArrayList<>();
+         lore.add(Component.text("Total value: ", NamedTextColor.GRAY)
+            .append(Component.text(EconomyPrices.formatMoney(totalValue), NamedTextColor.GOLD))
+            .decoration(TextDecoration.ITALIC, false));
+         lore.add(Component.empty());
+         if (totalValue > 0.0) {
+            lore.add(Component.text("Click to sell everything!", NamedTextColor.YELLOW)
+               .decoration(TextDecoration.ITALIC, false));
+         } else {
+            lore.add(Component.text("Drop sellable items above", NamedTextColor.DARK_GRAY)
+               .decoration(TextDecoration.ITALIC, false));
+         }
+
+         meta.lore(lore);
+         item.setItemMeta(meta);
+      }
+
+      return item;
    }
 
    public void openCaseShopFrom(Player player) {

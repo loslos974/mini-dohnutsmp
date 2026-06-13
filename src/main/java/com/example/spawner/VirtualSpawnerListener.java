@@ -16,6 +16,7 @@ import org.bukkit.event.entity.SpawnerSpawnEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.BlockStateMeta;
 
 public final class VirtualSpawnerListener implements Listener {
 
@@ -43,9 +44,17 @@ public final class VirtualSpawnerListener implements Listener {
          this.manager.registerSpawner(block, data);
          this.manager.getStorage().writeBlock(block, data);
       } else {
-         // Handle regular vanilla spawners by reading their spawn type
-         CreatureSpawner spawner = (CreatureSpawner) block.getState();
-         EntityType mobType = spawner.getSpawnedType();
+         // Vanilla / case-won spawner items: in Survival the block entity tag is
+         // stripped on placement, so the placed block reports no spawn type. Read
+         // the entity type from the ITEM's BlockStateMeta instead and apply it
+         // explicitly so it works in every gamemode.
+         EntityType mobType = readSpawnerItemType(item);
+         if (mobType == null || mobType == EntityType.UNKNOWN) {
+            if (block.getState() instanceof CreatureSpawner placed) {
+               mobType = placed.getSpawnedType();
+            }
+         }
+
          if (mobType != null && mobType != EntityType.UNKNOWN) {
             VirtualSpawnerData defaultData = new VirtualSpawnerData(mobType);
             defaultData.setOwner(event.getPlayer().getUniqueId());
@@ -53,6 +62,19 @@ public final class VirtualSpawnerListener implements Listener {
             this.manager.getStorage().writeBlock(block, defaultData);
          }
       }
+   }
+
+   private EntityType readSpawnerItemType(ItemStack item) {
+      if (item == null || item.getType() != Material.SPAWNER || !item.hasItemMeta()) {
+         return null;
+      }
+
+      if (item.getItemMeta() instanceof BlockStateMeta blockMeta && blockMeta.hasBlockState()
+            && blockMeta.getBlockState() instanceof CreatureSpawner spawner) {
+         return spawner.getSpawnedType();
+      }
+
+      return null;
    }
 
    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
